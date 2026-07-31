@@ -17,10 +17,22 @@
 
     <!-- 全局控制栏 -->
     <div class="global-controls">
-        <button class="btn btn-stop" id="btnStopAll" title="停止所有播放" disabled onclick="stopAllAudio()">
-            <span class="icon-stop">■</span> 全部停止
-        </button>
-        <span class="status-text" id="statusText">就绪</span>
+        <div class="controls-left">
+            <button class="btn btn-stop" id="btnStopAll" title="停止所有播放" disabled onclick="stopAllAudio()">
+                <span class="icon-stop">■</span> 全部停止
+            </button>
+            <label class="toggle-label" title="启用/停用定时播报">
+                <input type="checkbox" id="scheduleToggle" onchange="toggleSchedule()">
+                <span class="toggle-text">定时播报</span>
+            </label>
+            <span class="status-text" id="statusText">就绪</span>
+        </div>
+        <div class="controls-right">
+            <select class="device-select" id="deviceSelect" onchange="onDeviceChange()" title="选择音频输出设备">
+                <option value="">默认设备</option>
+            </select>
+            <button class="btn btn-small" id="btnRefreshDevices" onclick="refreshDevices()" title="刷新设备列表">🔄</button>
+        </div>
     </div>
 
     <!-- 时间段列表 -->

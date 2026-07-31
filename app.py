@@ -69,10 +69,23 @@ def load_config() -> dict:
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                config = json.load(f)
+                # 兼容旧配置：补充默认字段
+                if "schedule_enabled" not in config:
+                    config["schedule_enabled"] = False
+                if "output_device_id" not in config:
+                    config["output_device_id"] = ""
+                for slot in config.get("slots", []):
+                    if "time" not in slot:
+                        slot["time"] = ""
+                return config
         except (json.JSONDecodeError, IOError):
             pass
-    return {"slots": [{"id": 1, "audio": None}]}
+    return {
+        "slots": [{"id": 1, "audio": None, "time": ""}],
+        "schedule_enabled": False,
+        "output_device_id": "",
+    }
 
 
 def save_config(config: dict) -> None:
@@ -215,6 +228,29 @@ def open_folder():
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/check-schedule")
+def check_schedule():
+    """检查当前时间匹配哪些时间段，返回需要播放的slot列表"""
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    config = load_config()
+    matched = []
+    for slot in config.get("slots", []):
+        slot_time = slot.get("time", "").strip()
+        if slot_time and slot_time == current_time and slot.get("audio"):
+            matched.append({
+                "id": slot["id"],
+                "audio": slot["audio"],
+                "time": slot_time,
+            })
+    return jsonify({
+        "success": True,
+        "current_time": current_time,
+        "matched": matched,
+        "schedule_enabled": config.get("schedule_enabled", False),
+    })
 
 
 @app.route("/api/multi-upload", methods=["POST"])

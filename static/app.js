@@ -5,7 +5,7 @@
 
 // ==================== 全局状态 ====================
 const STATE = {
-    slots: [],              // 时间段列表 [{id, audio: filename|null}]
+    slots: [],              // 时间段列表 [{id, audio: filename|null, time: "HH:MM"}]
     audioFiles: [],         // 本地音频文件列表
     currentPlaying: null,   // 当前播放的 slot id
     maxSlots: 10,           // 最多时间段数
@@ -13,6 +13,12 @@ const STATE = {
     pendingDelete: null,    // 待删除的文件名
     pendingRename: null,    // 待重命名的文件原名
     dragData: null,         // 拖拽数据 {type:'audio'|'slot', filename?, slotId?}
+    scheduleEnabled: false, // 定时播报开关
+    outputDeviceId: "",     // 音频输出设备ID
+    scheduleTimer: null,    // 定时器句柄
+    playedToday: new Set(), // 今天已触发过的 slot ID（避免重复播放）
+    lastCheckMinute: "",    // 上次检查的分钟（防止同一分钟多次触发）
+    audioDevices: [],       // 可用音频输出设备列表
 };
 
 // 序号映射
@@ -22,9 +28,11 @@ const NUM_MAP = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', 
 document.addEventListener('DOMContentLoaded', async () => {
     startClock();
     setupUploadDragDrop();
+    await refreshDevices();
     await loadConfig();
     await refreshLibrary();
     renderSlots();
+    updateScheduleUI();
 });
 
 // ==================== 时钟 ====================
@@ -48,14 +56,29 @@ async function loadConfig() {
     try {
         const res = await fetch('/api/config');
         const data = await res.json();
-        if (data.success && data.config.slots && data.config.slots.length > 0) {
-            STATE.slots = data.config.slots;
-            STATE.nextSlotId = Math.max(...STATE.slots.map(s => s.id), 0) + 1;
+        if (data.success && data.config) {
+            const cfg = data.config;
+            if (cfg.slots && cfg.slots.length > 0) {
+                STATE.slots = cfg.slots.map(s => ({
+                    id: s.id,
+                    audio: s.audio || null,
+                    time: s.time || '',
+                }));
+                STATE.nextSlotId = Math.max(...STATE.slots.map(s => s.id), 0) + 1;
+            } else {
+                STATE.slots = [{ id: STATE.nextSlotId++, audio: null, time: '' }];
+            }
+            STATE.scheduleEnabled = cfg.schedule_enabled || false;
+            STATE.outputDeviceId = cfg.output_device_id || '';
         } else {
-            STATE.slots = [{ id: STATE.nextSlotId++, audio: null }];
+            STATE.slots = [{ id: STATE.nextSlotId++, audio: null, time: '' }];
+            STATE.scheduleEnabled = false;
+            STATE.outputDeviceId = '';
         }
     } catch (e) {
-        STATE.slots = [{ id: STATE.nextSlotId++, audio: null }];
+        STATE.slots = [{ id: STATE.nextSlotId++, audio: null, time: '' }];
+        STATE.scheduleEnabled = false;
+        STATE.outputDeviceId = '';
     }
 }
 
@@ -64,7 +87,11 @@ async function saveConfig() {
         await fetch('/api/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slots: STATE.slots })
+            body: JSON.stringify({
+                slots: STATE.slots,
+                schedule_enabled: STATE.scheduleEnabled,
+                output_device_id: STATE.outputDeviceId,
+            })
         });
     } catch (e) {
         console.error('保存配置失败:', e);
@@ -293,7 +320,7 @@ function addSlot(audioFilename = null) {
         showToast('最多只能有 ' + STATE.maxSlots + ' 个时间段', 'error');
         return;
     }
-    STATE.slots.push({ id: STATE.nextSlotId++, audio: audioFilename });
+    STATE.slots.push({ id: STATE.nextSlotId++, audio: audioFilename, time: '' });
     saveConfig();
     renderSlots();
 }
@@ -327,6 +354,7 @@ function renderSlots() {
         const num = NUM_MAP[index] || (index + 1);
         const isPlaying = STATE.currentPlaying === slot.id;
         const hasAudio = slot.audio && slot.audio.trim() !== '';
+        const timeVal = slot.time || '';
 
         return `
             <div class="slot-item ${isPlaying ? 'playing' : ''}"
@@ -346,6 +374,12 @@ function renderSlots() {
                          onclick="onDropZoneClick(${slot.id})">
                         ${hasAudio ? '🎵 ' + escapeHtml(slot.audio) : '拖入音频到此处，或点击选择'}
                     </div>
+                    <input type="time" class="slot-time-input"
+                           value="${escapeHtml(timeVal)}"
+                           onchange="onSlotTimeChange(${slot.id}, this.value)"
+                           onclick="event.stopPropagation()"
+                           title="设置定时播报时间（仅时间，不含日期）"
+                           placeholder="--:--">
                 </div>
                 <div class="slot-actions">
                     <button class="btn-play ${isPlaying ? 'playing' : ''}"
@@ -647,3 +681,171 @@ document.getElementById('deleteModal').addEventListener('click', function(e) {
 document.getElementById('renameInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') confirmRename();
 });
+
+// ==================== 时间段定时设置 ====================
+function onSlotTimeChange(slotId, value) {
+    const slot = STATE.slots.find(s => s.id === slotId);
+    if (slot) {
+        slot.time = value;
+        saveConfig();
+    }
+}
+
+// ==================== 定时播报 ====================
+function toggleSchedule() {
+    STATE.scheduleEnabled = document.getElementById('scheduleToggle').checked;
+    saveConfig();
+    updateScheduleUI();
+}
+
+function updateScheduleUI() {
+    const toggle = document.getElementById('scheduleToggle');
+    toggle.checked = STATE.scheduleEnabled;
+    if (STATE.scheduleEnabled) {
+        startSchedule();
+        setStatus('定时播报已开启');
+    } else {
+        stopSchedule();
+        setStatus('定时播报已关闭');
+    }
+}
+
+function startSchedule() {
+    stopSchedule();
+    // 重置当日记录
+    STATE.playedToday = new Set();
+    STATE.lastCheckMinute = '';
+    // 每5秒检查一次
+    STATE.scheduleTimer = setInterval(checkSchedule, 5000);
+    // 立即检查一次
+    checkSchedule();
+}
+
+function stopSchedule() {
+    if (STATE.scheduleTimer) {
+        clearInterval(STATE.scheduleTimer);
+        STATE.scheduleTimer = null;
+    }
+}
+
+async function checkSchedule() {
+    if (!STATE.scheduleEnabled) return;
+
+    try {
+        const res = await fetch('/api/check-schedule');
+        const data = await res.json();
+        if (!data.success) return;
+
+        const currentMinute = data.current_time;
+        // 防止同一分钟多次触发
+        if (currentMinute === STATE.lastCheckMinute) return;
+        STATE.lastCheckMinute = currentMinute;
+
+        // 高亮匹配的时间段
+        highlightScheduledSlots(data.matched);
+
+        for (const m of data.matched) {
+            // 避免重复播放
+            if (STATE.playedToday.has(m.id)) continue;
+            STATE.playedToday.add(m.id);
+
+            // 自动播放
+            const slot = STATE.slots.find(s => s.id === m.id);
+            if (slot && slot.audio) {
+                showToast('定时播报: ' + slot.audio, 'success');
+                await playSlotAudio(slot);
+            }
+        }
+    } catch (e) {
+        // 静默失败，不影响用户体验
+    }
+}
+
+function highlightScheduledSlots(matched) {
+    // 清除所有高亮
+    document.querySelectorAll('.slot-time-input').forEach(el => {
+        el.classList.remove('schedule-due');
+    });
+    // 高亮匹配的
+    for (const m of matched) {
+        const slotEl = document.getElementById('slot-' + m.id);
+        if (slotEl) {
+            const timeInput = slotEl.querySelector('.slot-time-input');
+            if (timeInput) timeInput.classList.add('schedule-due');
+        }
+    }
+}
+
+async function playSlotAudio(slot) {
+    if (!slot || !slot.audio) return;
+    const player = document.getElementById('audioPlayer');
+    player.pause();
+    player.currentTime = 0;
+    player.src = `/api/audio/${encodeURIComponent(slot.audio)}`;
+    try {
+        await setAudioDevice();
+        await player.play();
+        STATE.currentPlaying = slot.id;
+        updatePlayingUI();
+        setStatus('定时播报: ' + slot.audio);
+        document.getElementById('btnStopAll').disabled = false;
+    } catch (e) {
+        console.error('定时播放失败:', e);
+        STATE.currentPlaying = null;
+        updatePlayingUI();
+    }
+}
+
+// ==================== 外部设备管理 ====================
+async function refreshDevices() {
+    try {
+        // 请求音频输出设备列表
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        STATE.audioDevices = devices.filter(d => d.kind === 'audiooutput');
+        renderDeviceOptions();
+    } catch (e) {
+        console.error('获取设备列表失败:', e);
+        STATE.audioDevices = [];
+    }
+}
+
+function renderDeviceOptions() {
+    const select = document.getElementById('deviceSelect');
+    const currentVal = STATE.outputDeviceId;
+
+    let html = '<option value="">默认设备</option>';
+    for (const d of STATE.audioDevices) {
+        const selected = d.deviceId === currentVal ? 'selected' : '';
+        const label = d.label || ('音频设备 ' + d.deviceId.slice(0, 8));
+        html += `<option value="${d.deviceId}" ${selected}>${escapeHtml(label)}</option>`;
+    }
+    select.innerHTML = html;
+}
+
+async function onDeviceChange() {
+    const select = document.getElementById('deviceSelect');
+    STATE.outputDeviceId = select.value;
+    saveConfig();
+    try {
+        await setAudioDevice();
+        if (STATE.outputDeviceId) {
+            const device = STATE.audioDevices.find(d => d.deviceId === STATE.outputDeviceId);
+            showToast('已切换到: ' + (device ? device.label : '所选设备'), 'success');
+        }
+    } catch (e) {
+        showToast('设备切换失败: ' + e.message, 'error');
+    }
+}
+
+async function setAudioDevice() {
+    const player = document.getElementById('audioPlayer');
+    if (!STATE.outputDeviceId) return;
+    try {
+        // 使用 setSinkId 将音频路由到指定设备
+        if (typeof player.setSinkId === 'function') {
+            await player.setSinkId(STATE.outputDeviceId);
+        }
+    } catch (e) {
+        console.error('设置音频设备失败:', e);
+    }
+}
