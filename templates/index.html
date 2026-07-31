@@ -28,10 +28,38 @@
             <span class="status-text" id="statusText">就绪</span>
         </div>
         <div class="controls-right">
-            <select class="device-select" id="deviceSelect" onchange="onDeviceChange()" title="选择音频输出设备">
-                <option value="">默认设备</option>
-            </select>
-            <button class="btn btn-small" id="btnRefreshDevices" onclick="refreshDevices()" title="刷新设备列表">🔄</button>
+            <button class="btn btn-device-panel" id="btnDevicePanel" onclick="toggleDevicePanel()" title="设备管理">
+                🔌 设备管理 (<span id="deviceCountBadge">0</span>)
+            </button>
+        </div>
+    </div>
+
+    <!-- 设备管理面板 -->
+    <div class="device-panel" id="devicePanel">
+        <div class="device-panel-header">
+            <h3 class="device-panel-title">设备管理</h3>
+            <div class="device-panel-actions">
+                <button class="btn btn-small" onclick="scanBluetoothDevices()" title="扫描蓝牙设备">🔍 蓝牙扫描</button>
+                <button class="btn btn-small" onclick="refreshDevices()" title="刷新所有设备">🔄 刷新</button>
+                <button class="btn btn-small btn-close-panel" onclick="toggleDevicePanel()">✕</button>
+            </div>
+        </div>
+        <div class="device-panel-body">
+            <div class="device-section">
+                <h4 class="device-section-title">🔊 蓝牙设备</h4>
+                <div class="device-list" id="bluetoothDeviceList">
+                    <div class="device-empty">点击"蓝牙扫描"搜索附近设备</div>
+                </div>
+            </div>
+            <div class="device-section">
+                <h4 class="device-section-title">🔌 有线 / 内置设备</h4>
+                <div class="device-list" id="wiredDeviceList">
+                    <div class="device-empty">暂无设备</div>
+                </div>
+            </div>
+            <div class="device-panel-footer">
+                <span class="device-status" id="deviceStatus">当前输出: 默认设备</span>
+            </div>
         </div>
     </div>
 

@@ -797,55 +797,217 @@ async function playSlotAudio(slot) {
 }
 
 // ==================== 外部设备管理 ====================
+let deviceChangeListener = false;
+
+// 设备面板开关
+function toggleDevicePanel() {
+    const panel = document.getElementById('devicePanel');
+    panel.classList.toggle('show');
+    if (panel.classList.contains('show')) {
+        refreshDevices();
+    }
+}
+
+// 判断设备类型
+function classifyDevice(label) {
+    const lower = (label || '').toLowerCase();
+    if (lower.includes('bluetooth') || lower.includes('蓝牙') || lower.includes('bt') ||
+        lower.includes('airpods') || lower.includes('headset') || lower.includes('headphone') ||
+        lower.includes('earbuds') || lower.includes('speaker')) {
+        return 'bluetooth';
+    }
+    if (lower.includes('speaker') || lower.includes('扬声器') || lower.includes('realtek') ||
+        lower.includes('high definition audio') || lower.includes('headphone') ||
+        lower.includes('headset') || lower.includes('line') || lower.includes('aux') ||
+        lower.includes('3.5mm') || lower.includes('jack')) {
+        return 'wired';
+    }
+    return 'wired'; // 默认归类为有线
+}
+
+// 刷新所有设备
 async function refreshDevices() {
     try {
-        // 请求音频输出设备列表
+        // 先请求权限以获取完整标签
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(t => t.stop());
+        } catch (e) {
+            // 权限被拒绝，仍然可以枚举但标签可能为空
+        }
+
         const devices = await navigator.mediaDevices.enumerateDevices();
-        STATE.audioDevices = devices.filter(d => d.kind === 'audiooutput');
-        renderDeviceOptions();
+        const audioDevices = devices.filter(d => d.kind === 'audiooutput');
+        STATE.audioDevices = audioDevices;
+
+        renderDeviceLists();
+        bindDeviceListeners();
+        updateDeviceCountBadge();
+        updateDeviceStatus();
     } catch (e) {
         console.error('获取设备列表失败:', e);
-        STATE.audioDevices = [];
+        showToast('获取设备列表失败，请检查权限设置', 'error');
     }
 }
 
-function renderDeviceOptions() {
-    const select = document.getElementById('deviceSelect');
-    const currentVal = STATE.outputDeviceId;
+// 渲染设备列表（分类显示）
+function renderDeviceLists() {
+    const btList = document.getElementById('bluetoothDeviceList');
+    const wiredList = document.getElementById('wiredDeviceList');
 
-    let html = '<option value="">默认设备</option>';
-    for (const d of STATE.audioDevices) {
-        const selected = d.deviceId === currentVal ? 'selected' : '';
-        const label = d.label || ('音频设备 ' + d.deviceId.slice(0, 8));
-        html += `<option value="${d.deviceId}" ${selected}>${escapeHtml(label)}</option>`;
+    if (STATE.audioDevices.length === 0) {
+        if (btList) btList.innerHTML = '<div class="device-empty">未检测到蓝牙设备</div>';
+        if (wiredList) wiredList.innerHTML = '<div class="device-empty">未检测到有线设备</div>';
+        return;
     }
-    select.innerHTML = html;
+
+    const btDevices = [];
+    const wiredDevices = [];
+
+    STATE.audioDevices.forEach(d => {
+        const label = d.label || '未知设备 (' + d.deviceId.slice(0, 8) + ')';
+        const type = d.label ? classifyDevice(label) : 'wired';
+        const isActive = d.deviceId === STATE.outputDeviceId;
+
+        const deviceHTML = `
+            <div class="device-card ${isActive ? 'active' : ''}"
+                 data-device-id="${d.deviceId}"
+                 onclick="selectDevice('${d.deviceId}')">
+                <div class="device-card-icon">${isActive ? '✅' : '🔊'}</div>
+                <div class="device-card-info">
+                    <div class="device-card-name">${escapeHtml(label)}</div>
+                    <div class="device-card-type">${type === 'bluetooth' ? '蓝牙' : '有线/内置'}</div>
+                </div>
+                <div class="device-card-status">
+                    ${isActive ? '<span class="badge-active">当前使用</span>' : '<button class="btn-connect" onclick="event.stopPropagation();selectDevice(\'' + d.deviceId + '\')">连接</button>'}
+                </div>
+            </div>
+        `;
+
+        if (type === 'bluetooth') {
+            btDevices.push(deviceHTML);
+        } else {
+            wiredDevices.push(deviceHTML);
+        }
+    });
+
+    if (btList) {
+        btList.innerHTML = btDevices.length > 0
+            ? btDevices.join('')
+            : '<div class="device-empty">未检测到蓝牙设备</div>';
+    }
+    if (wiredList) {
+        wiredList.innerHTML = wiredDevices.length > 0
+            ? wiredDevices.join('')
+            : '<div class="device-empty">未检测到有线设备</div>';
+    }
 }
 
-async function onDeviceChange() {
-    const select = document.getElementById('deviceSelect');
-    STATE.outputDeviceId = select.value;
+// 选择/切换设备
+async function selectDevice(deviceId) {
+    STATE.outputDeviceId = deviceId;
     saveConfig();
+    renderDeviceLists();
+    updateDeviceStatus();
     try {
         await setAudioDevice();
-        if (STATE.outputDeviceId) {
-            const device = STATE.audioDevices.find(d => d.deviceId === STATE.outputDeviceId);
-            showToast('已切换到: ' + (device ? device.label : '所选设备'), 'success');
-        }
+        const device = STATE.audioDevices.find(d => d.deviceId === deviceId);
+        showToast('已切换到: ' + (device ? (device.label || '设备') : '默认设备'), 'success');
     } catch (e) {
         showToast('设备切换失败: ' + e.message, 'error');
     }
 }
 
+// 更新设备数量徽章
+function updateDeviceCountBadge() {
+    const badge = document.getElementById('deviceCountBadge');
+    if (badge) {
+        badge.textContent = STATE.audioDevices.length;
+    }
+}
+
+// 更新设备状态文本
+function updateDeviceStatus() {
+    const statusEl = document.getElementById('deviceStatus');
+    if (!statusEl) return;
+    let deviceName = '默认设备';
+    if (STATE.outputDeviceId) {
+        const device = STATE.audioDevices.find(d => d.deviceId === STATE.outputDeviceId);
+        if (device) {
+            deviceName = device.label || '设备';
+        }
+    }
+    statusEl.textContent = '当前输出: ' + deviceName;
+}
+
+// 蓝牙扫描
+async function scanBluetoothDevices() {
+    showToast('正在扫描蓝牙设备...');
+    try {
+        // 使用 Web Bluetooth API 扫描附近设备
+        if (typeof navigator.bluetooth === 'undefined') {
+            showToast('当前环境不支持蓝牙扫描，请通过系统蓝牙设置连接设备后刷新', 'error');
+            // 回退方案：通过 enumerateDevices 刷新
+            await refreshDevices();
+            return;
+        }
+
+        // 尝试请求蓝牙设备（会弹出系统蓝牙选择器）
+        const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: []
+        });
+
+        if (device) {
+            showToast('已发现蓝牙设备: ' + (device.name || '未命名设备'), 'success');
+            // 连接设备
+            await device.gatt.connect();
+            showToast('蓝牙设备已连接: ' + (device.name || '未命名设备'), 'success');
+        }
+    } catch (e) {
+        if (e.name === 'NotFoundError') {
+            showToast('未发现蓝牙设备，请确保设备已开启蓝牙并处于可发现模式');
+        } else if (e.name === 'SecurityError') {
+            showToast('蓝牙扫描需要用户授权，请在弹窗中选择设备');
+        } else {
+            showToast('蓝牙扫描: ' + e.message);
+        }
+    }
+    // 无论如何都刷新设备列表
+    await refreshDevices();
+}
+
+// 监听设备变化
+function bindDeviceListeners() {
+    if (deviceChangeListener) return;
+    if (typeof navigator.mediaDevices === 'undefined') return;
+
+    try {
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+            refreshDevices();
+            showToast('检测到设备变化，已自动刷新');
+        });
+        deviceChangeListener = true;
+    } catch (e) {
+        // 部分浏览器不支持
+    }
+}
+
+// 设置音频输出设备
 async function setAudioDevice() {
     const player = document.getElementById('audioPlayer');
     if (!STATE.outputDeviceId) return;
     try {
-        // 使用 setSinkId 将音频路由到指定设备
         if (typeof player.setSinkId === 'function') {
             await player.setSinkId(STATE.outputDeviceId);
         }
     } catch (e) {
         console.error('设置音频设备失败:', e);
     }
+}
+
+// 兼容旧的 onDeviceChange 函数
+async function onDeviceChange() {
+    // 旧版兼容，现在由 selectDevice 处理
+    await refreshDevices();
 }

@@ -107,23 +107,194 @@ body {
     color: #1A1A1A;
 }
 
-/* 设备选择器 */
-.device-select {
-    padding: 6px 10px;
-    border: 1px solid #D6E4F0;
-    border-radius: 6px;
-    font-size: 13px;
+/* 设备管理按钮 */
+.btn-device-panel {
+    background: #1E5AA8;
+    color: #FFFFFF;
+    border-color: #1E5AA8;
+    font-weight: 500;
+}
+
+.btn-device-panel:hover {
+    background: #174B8C;
+    border-color: #174B8C;
+}
+
+.btn-close-panel {
+    background: #FEE2E2;
+    color: #DC2626;
+    border-color: #FECACA;
+}
+
+.btn-close-panel:hover {
+    background: #FECACA;
+}
+
+/* ========== 设备管理面板 ========== */
+.device-panel {
+    display: none;
     background: #FFFFFF;
+    border-bottom: 2px solid #D6E4F0;
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.device-panel.show {
+    display: block;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.device-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px 10px;
+    border-bottom: 1px solid #F0F0F0;
+}
+
+.device-panel-title {
+    font-size: 15px;
+    font-weight: 600;
     color: #1A1A1A;
-    outline: none;
+}
+
+.device-panel-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.device-panel-body {
+    padding: 12px 28px 16px;
+}
+
+.device-section {
+    margin-bottom: 14px;
+}
+
+.device-section:last-child {
+    margin-bottom: 0;
+}
+
+.device-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6B7280;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #F0F0F0;
+}
+
+.device-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.device-empty {
+    text-align: center;
+    padding: 16px;
+    color: #9CA3AF;
+    font-size: 13px;
+    background: #F5F8FC;
+    border-radius: 6px;
+    border: 1px dashed #D6E4F0;
+}
+
+/* 设备卡片 */
+.device-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #F5F8FC;
+    border: 1px solid #D6E4F0;
+    border-radius: 8px;
     cursor: pointer;
-    max-width: 180px;
+    transition: all 0.2s;
+}
+
+.device-card:hover {
+    background: #EEF3FA;
+    border-color: #1E5AA8;
+}
+
+.device-card.active {
+    background: #E0ECFF;
+    border-color: #1E5AA8;
+    box-shadow: 0 0 0 2px rgba(30, 90, 168, 0.15);
+}
+
+.device-card-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    width: 28px;
+    text-align: center;
+}
+
+.device-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.device-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1A1A1A;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.device-card-type {
+    font-size: 11px;
+    color: #6B7280;
+    margin-top: 2px;
+}
+
+.device-card-status {
+    flex-shrink: 0;
+}
+
+.badge-active {
+    display: inline-block;
+    padding: 2px 10px;
+    background: #059669;
+    color: #FFFFFF;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.btn-connect {
+    padding: 4px 12px;
+    background: #1E5AA8;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
     font-family: inherit;
 }
 
-.device-select:focus {
-    border-color: #1E5AA8;
-    box-shadow: 0 0 0 2px rgba(30, 90, 168, 0.1);
+.btn-connect:hover {
+    background: #174B8C;
+}
+
+.device-panel-footer {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #F0F0F0;
+    text-align: right;
+}
+
+.device-status {
+    font-size: 12px;
+    color: #6B7280;
+    font-weight: 500;
 }
 
 /* ========== 按钮 ========== */
