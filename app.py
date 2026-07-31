@@ -8,6 +8,8 @@ import json
 import shutil
 import subprocess
 import mimetypes
+import socket
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -17,10 +19,16 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 
+import webview
+
 app = Flask(__name__)
 
 # 项目根目录
-BASE_DIR = Path(__file__).parent
+# PyInstaller 打包后使用 exe 所在目录，开发时使用脚本所在目录
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys.executable).parent
+else:
+    BASE_DIR = Path(__file__).parent
 AUDIO_DIR = BASE_DIR / "audio"
 DATA_DIR = BASE_DIR / "data"
 CONFIG_FILE = DATA_DIR / "config.json"
@@ -292,12 +300,41 @@ def multi_upload():
     })
 
 
+def find_free_port() -> int:
+    """找一个可用端口"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def start_flask(port: int) -> None:
+    """在后台线程运行 Flask"""
+    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+
+
 if __name__ == "__main__":
+    PORT = find_free_port()
+    URL = f"http://127.0.0.1:{PORT}"
+
     print("=" * 50)
     print("  考勤应急语音系统")
     print(f"  音频目录: {AUDIO_DIR}")
     print(f"  音频文件数: {len(get_audio_files())}")
+    print(f"  本地地址: {URL}")
     print("=" * 50)
-    # PyInstaller 打包后自动禁用 debug 模式
-    is_packaged = getattr(sys, 'frozen', False)
-    app.run(host="127.0.0.1", port=5800, debug=not is_packaged)
+
+    # 后台启动 Flask
+    t = threading.Thread(target=start_flask, args=(PORT,), daemon=True)
+    t.start()
+
+    # 创建桌面原生窗口
+    webview.create_window(
+        title="考勤应急语音系统",
+        url=URL,
+        width=960,
+        height=700,
+        resizable=True,
+        min_size=(800, 600),
+        confirm_close=True,
+    )
+    webview.start()
