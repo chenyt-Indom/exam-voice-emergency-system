@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考勤应急语音系统</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<div class="app-container">
+    <!-- 标题栏 -->
+    <header class="header">
+        <h1 class="header-title">考勤应急语音系统</h1>
+        <span class="header-time" id="headerTime">--</span>
+    </header>
+
+    <!-- 全局控制栏 -->
+    <div class="global-controls">
+        <button class="btn btn-stop" id="btnStopAll" title="停止所有播放" disabled onclick="stopAllAudio()">
+            <span class="icon-stop">■</span> 全部停止
+        </button>
+        <span class="status-text" id="statusText">就绪</span>
+    </div>
+
+    <!-- 时间段列表 -->
+    <section class="slots-section">
+        <h2 class="section-title">时间段管理</h2>
+        <div class="slots-list" id="slotsList">
+            <!-- 动态生成 -->
+        </div>
+        <div class="slots-footer">
+            <button class="btn btn-add" id="btnAddSlot" onclick="addSlot()">+ 增加时间段</button>
+            <span class="slot-count" id="slotCount">共 1 个时间段</span>
+        </div>
+    </section>
+
+    <!-- 分隔线 -->
+    <hr class="divider">
+
+    <!-- 本地音频库 -->
+    <section class="library-section">
+        <div class="library-header" onclick="toggleLibrary()">
+            <span class="library-arrow" id="libraryArrow">▼</span>
+            <h2 class="section-title">本地音频库</h2>
+            <span class="library-count" id="libraryCount">0 个音频</span>
+        </div>
+        <div class="library-body" id="libraryBody">
+            <!-- 上传区域 -->
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-zone" id="uploadZone">
+                    <span class="upload-icon">📁</span>
+                    <p>拖拽音频文件到此处上传</p>
+                    <p class="upload-hint">支持 mp3 / wav / ogg / flac / aac / m4a / wma</p>
+                    <button class="btn btn-upload" onclick="document.getElementById('fileInput').click()">选择文件</button>
+                    <input type="file" id="fileInput" accept="audio/*" multiple hidden onchange="handleFileSelect(event)">
+                </div>
+            </div>
+            <!-- 音频列表 -->
+            <div class="audio-list" id="audioList">
+                <!-- 动态生成 -->
+            </div>
+            <div class="library-actions">
+                <button class="btn btn-folder" onclick="openAudioFolder()">📁 打开本地文件夹</button>
+                <button class="btn btn-refresh" onclick="refreshLibrary()">🔄 刷新列表</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 重命名弹窗 -->
+    <div class="modal-overlay" id="renameModal">
+        <div class="modal-box">
+            <h3>重命名音频文件</h3>
+            <input type="text" id="renameInput" class="modal-input" placeholder="输入新文件名">
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeRenameModal()">取消</button>
+                <button class="btn btn-confirm" onclick="confirmRename()">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal-box">
+            <h3>确认删除</h3>
+            <p id="deleteMsg">确定要删除此音频文件吗？此操作不可恢复。</p>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeDeleteModal()">取消</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 隐藏的音频播放器 -->
+    <audio id="audioPlayer" preload="auto" onended="onAudioEnded()" onerror="onAudioError()"></audio>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
