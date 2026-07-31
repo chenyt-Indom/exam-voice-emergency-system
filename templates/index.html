@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>语音播报系统</title>
+    <title>考场语音播报系统</title>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 <div class="app-container">
     <!-- 标题栏 -->
     <header class="header">
-        <h1 class="header-title">语音播报系统</h1>  
+        <h1 class="header-title">考场语音播报系统</h1>  
         <span class="header-time" id="headerTime">--</span>
     </header>
 
@@ -107,6 +107,21 @@
             </div>
         </div>
     </section>
+
+    <!-- 上传命名弹窗 -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal-box">
+            <h3>导入音频</h3>
+            <p class="modal-subtitle" id="uploadModalSubtitle"></p>
+            <div class="upload-names-list" id="uploadNamesList">
+                <!-- 动态生成 -->
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeUploadModal()">取消</button>
+                <button class="btn btn-confirm" onclick="confirmUpload()">确认导入</button>
+            </div>
+        </div>
+    </div>
 
     <!-- 重命名弹窗 -->
     <div class="modal-overlay" id="renameModal">

@@ -290,22 +290,38 @@ def open_sound_settings():
 
 @app.route("/api/multi-upload", methods=["POST"])
 def multi_upload():
-    """批量上传音频文件"""
+    """批量上传音频文件，支持自定义命名"""
     if "files" not in request.files:
         return jsonify({"success": False, "error": "未选择文件"}), 400
 
     files = request.files.getlist("files")
+    names_str = request.form.get("names", "[]")
+    try:
+        custom_names = json.loads(names_str)
+    except json.JSONDecodeError:
+        custom_names = []
+
     uploaded = []
     failed = []
 
-    for file in files:
+    for i, file in enumerate(files):
         if file.filename == "":
             continue
         if not allowed_file(file.filename):
             failed.append({"name": file.filename, "reason": "格式不支持"})
             continue
 
-        filename = secure_filename(file.filename)
+        # 使用自定义名称或原始文件名
+        if i < len(custom_names) and custom_names[i]:
+            final_name = custom_names[i]
+            # 确保有扩展名
+            if not Path(final_name).suffix:
+                ext = Path(file.filename).suffix
+                final_name += ext
+        else:
+            final_name = file.filename
+
+        filename = secure_filename(final_name)
         save_path = AUDIO_DIR / filename
         base = Path(filename).stem
         ext = Path(filename).suffix
@@ -322,7 +338,7 @@ def multi_upload():
         "success": True,
         "uploaded": uploaded,
         "failed": failed,
-        "message": f"成功上传 {len(uploaded)} 个文件"
+        "message": f"成功导入 {len(uploaded)} 个文件"
     })
 
 
@@ -343,7 +359,7 @@ if __name__ == "__main__":
     URL = f"http://127.0.0.1:{PORT}"
 
     print("=" * 50)
-    print("  考勤应急语音系统")
+    print("  考场语音播报系统")
     print(f"  音频目录: {AUDIO_DIR}")
     print(f"  音频文件数: {len(get_audio_files())}")
     print(f"  本地地址: {URL}")
@@ -355,7 +371,7 @@ if __name__ == "__main__":
 
     # 创建桌面原生窗口
     webview.create_window(
-        title="考勤应急语音系统",
+        title="考场语音播报系统",
         url=URL,
         width=960,
         height=700,

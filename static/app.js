@@ -161,6 +161,8 @@ async function previewAudio(filename) {
 }
 
 // ==================== 上传 ====================
+let pendingUploadFiles = [];  // 待上传的文件列表
+
 function setupUploadDragDrop() {
     const zone = document.getElementById('uploadZone');
 
@@ -178,7 +180,7 @@ function setupUploadDragDrop() {
         zone.classList.remove('drag-over');
         const files = e.dataTransfer.files;
         if (files.length > 0) {
-            await uploadFiles(files);
+            openUploadModal(Array.from(files));
         }
     });
 }
@@ -186,18 +188,71 @@ function setupUploadDragDrop() {
 async function handleFileSelect(event) {
     const files = event.target.files;
     if (files.length > 0) {
-        await uploadFiles(files);
+        openUploadModal(Array.from(files));
     }
     event.target.value = '';
 }
 
-async function uploadFiles(files) {
-    const formData = new FormData();
-    for (const f of files) {
-        formData.append('files', f);
+// 打开上传命名弹窗
+function openUploadModal(files) {
+    pendingUploadFiles = files;
+    const list = document.getElementById('uploadNamesList');
+    const subtitle = document.getElementById('uploadModalSubtitle');
+    subtitle.textContent = '共 ' + files.length + ' 个文件，可修改名称（默认使用原名）';
+
+    list.innerHTML = files.map((f, i) => {
+        const nameWithoutExt = f.name.replace(/\.[^.]+$/, '');
+        const ext = f.name.split('.').pop();
+        const safeName = escapeHtml(nameWithoutExt);
+        return `
+            <div class="upload-name-item">
+                <span class="upload-name-index">${i + 1}</span>
+                <div class="upload-name-input-wrap">
+                    <input type="text" class="upload-name-input" value="${safeName}" data-index="${i}" data-ext="${ext}">
+                    <span class="upload-name-ext">.${escapeHtml(ext)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    document.getElementById('uploadModal').classList.add('show');
+    // 聚焦第一个输入框
+    setTimeout(() => {
+        const firstInput = list.querySelector('.upload-name-input');
+        if (firstInput) firstInput.focus();
+    }, 100);
+}
+
+function closeUploadModal() {
+    document.getElementById('uploadModal').classList.remove('show');
+    pendingUploadFiles = [];
+}
+
+async function confirmUpload() {
+    const inputs = document.querySelectorAll('.upload-name-input');
+    const names = [];
+    for (const input of inputs) {
+        const name = input.value.trim();
+        if (name) {
+            const ext = input.dataset.ext;
+            names.push(name + '.' + ext);
+        }
     }
 
-    showToast('正在上传...');
+    if (names.length === 0) {
+        showToast('请输入至少一个文件名', 'error');
+        return;
+    }
+
+    closeUploadModal();
+
+    const formData = new FormData();
+    for (const f of pendingUploadFiles) {
+        formData.append('files', f);
+    }
+    formData.append('names', JSON.stringify(names));
+
+    showToast('正在导入...');
 
     try {
         const res = await fetch('/api/multi-upload', {
@@ -206,13 +261,13 @@ async function uploadFiles(files) {
         });
         const data = await res.json();
         if (data.success) {
-            showToast('成功上传 ' + data.uploaded.length + ' 个文件', 'success');
+            showToast('成功导入 ' + data.uploaded.length + ' 个文件', 'success');
             await refreshLibrary();
         } else {
-            showToast('上传失败: ' + data.error, 'error');
+            showToast('导入失败: ' + data.error, 'error');
         }
     } catch (e) {
-        showToast('上传失败: ' + e.message, 'error');
+        showToast('导入失败: ' + e.message, 'error');
     }
 }
 
@@ -675,6 +730,9 @@ document.getElementById('renameModal').addEventListener('click', function(e) {
 });
 document.getElementById('deleteModal').addEventListener('click', function(e) {
     if (e.target === this) closeDeleteModal();
+});
+document.getElementById('uploadModal').addEventListener('click', function(e) {
+    if (e.target === this) closeUploadModal();
 });
 
 // 回车确认重命名
