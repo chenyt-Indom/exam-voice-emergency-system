@@ -244,10 +244,12 @@ async function confirmUpload() {
         return;
     }
 
+    // 先保存文件引用，再关闭弹窗
+    const filesToUpload = [...pendingUploadFiles];
     closeUploadModal();
 
     const formData = new FormData();
-    for (const f of pendingUploadFiles) {
+    for (const f of filesToUpload) {
         formData.append('files', f);
     }
     formData.append('names', JSON.stringify(names));

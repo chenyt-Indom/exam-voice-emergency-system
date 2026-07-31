@@ -10,6 +10,7 @@ import subprocess
 import mimetypes
 import socket
 import threading
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -73,6 +74,19 @@ def format_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f} TB"
 
 
+def safe_filename(name: str) -> str:
+    """安全文件名：移除路径遍历字符，但保留中文等Unicode字符"""
+    # 移除路径分隔符和控制字符
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name)
+    # 移除首尾空格和点
+    name = name.strip('. ')
+    # 限制长度
+    if len(name) > 200:
+        base, ext = Path(name).stem, Path(name).suffix
+        name = base[:200 - len(ext)] + ext
+    return name or "unnamed"
+
+
 def load_config() -> dict:
     """加载配置文件"""
     if CONFIG_FILE.exists():
@@ -132,7 +146,7 @@ def upload_audio():
     if not allowed_file(file.filename):
         return jsonify({"success": False, "error": f"不支持的格式，仅支持: {', '.join(ALLOWED_EXTENSIONS)}"}), 400
 
-    filename = secure_filename(file.filename)
+    filename = safe_filename(file.filename)
     # 处理重名
     save_path = AUDIO_DIR / filename
     base = Path(filename).stem
@@ -150,7 +164,7 @@ def upload_audio():
 @app.route("/api/audio-files/<path:filename>", methods=["DELETE"])
 def delete_audio(filename: str):
     """删除指定音频文件"""
-    safe_name = secure_filename(filename)
+    safe_name = safe_filename(filename)
     file_path = AUDIO_DIR / safe_name
     if not file_path.exists():
         return jsonify({"success": False, "error": "文件不存在"}), 404
@@ -170,8 +184,8 @@ def rename_audio(filename: str):
     if not new_name:
         return jsonify({"success": False, "error": "新文件名不能为空"}), 400
 
-    safe_old = secure_filename(filename)
-    safe_new = secure_filename(new_name)
+    safe_old = safe_filename(filename)
+    safe_new = safe_filename(new_name)
 
     # 确保扩展名一致
     old_ext = Path(safe_old).suffix
@@ -196,7 +210,7 @@ def rename_audio(filename: str):
 @app.route("/api/audio/<path:filename>")
 def serve_audio(filename: str):
     """提供音频文件流（用于播放）"""
-    safe_name = secure_filename(filename)
+    safe_name = safe_filename(filename)
     file_path = AUDIO_DIR / safe_name
     if not file_path.exists():
         return jsonify({"error": "文件不存在"}), 404
@@ -321,7 +335,7 @@ def multi_upload():
         else:
             final_name = file.filename
 
-        filename = secure_filename(final_name)
+        filename = safe_filename(final_name)
         save_path = AUDIO_DIR / filename
         base = Path(filename).stem
         ext = Path(filename).suffix
