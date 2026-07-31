@@ -1,0 +1,11 @@
+audio/
+data/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+venv/
+.venv/
+build/
+dist/
+*.spec
