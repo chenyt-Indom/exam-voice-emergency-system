@@ -2,7 +2,10 @@
   "slots": [
     {
       "id": 2,
-      "audio": null
+      "audio": null,
+      "time": "09:35"
     }
-  ]
+  ],
+  "schedule_enabled": false,
+  "output_device_id": ""
 }

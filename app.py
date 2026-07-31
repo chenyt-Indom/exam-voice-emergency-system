@@ -3,6 +3,7 @@
 纯本地运行，管理本地音频文件的增删改查与播放
 """
 import os
+import sys
 import json
 import shutil
 import subprocess
@@ -297,4 +298,6 @@ if __name__ == "__main__":
     print(f"  音频目录: {AUDIO_DIR}")
     print(f"  音频文件数: {len(get_audio_files())}")
     print("=" * 50)
-    app.run(host="127.0.0.1", port=5800, debug=True)
+    # PyInstaller 打包后自动禁用 debug 模式
+    is_packaged = getattr(sys, 'frozen', False)
+    app.run(host="127.0.0.1", port=5800, debug=not is_packaged)
