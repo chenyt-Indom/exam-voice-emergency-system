@@ -39,16 +39,17 @@
         <div class="device-panel-header">
             <h3 class="device-panel-title">设备管理</h3>
             <div class="device-panel-actions">
-                <button class="btn btn-small" onclick="scanBluetoothDevices()" title="扫描蓝牙设备">🔍 蓝牙扫描</button>
-                <button class="btn btn-small" onclick="refreshDevices()" title="刷新所有设备">🔄 刷新</button>
+                <button class="btn btn-small" onclick="scanBluetoothDevices()" title="打开 Windows 蓝牙设置进行配对">🔍 蓝牙配对</button>
+                <button class="btn btn-small" onclick="openSoundSettings()" title="打开 Windows 声音设置">🔊 声音设置</button>
+                <button class="btn btn-small" onclick="refreshDevices()" title="刷新设备列表">🔄 刷新</button>
                 <button class="btn btn-small btn-close-panel" onclick="toggleDevicePanel()">✕</button>
             </div>
         </div>
         <div class="device-panel-body">
             <div class="device-section">
-                <h4 class="device-section-title">🔊 蓝牙设备</h4>
+                <h4 class="device-section-title">🔷 蓝牙设备</h4>
                 <div class="device-list" id="bluetoothDeviceList">
-                    <div class="device-empty">点击"蓝牙扫描"搜索附近设备</div>
+                    <div class="device-empty">点击"蓝牙配对"打开 Windows 蓝牙设置，配对后刷新</div>
                 </div>
             </div>
             <div class="device-section">

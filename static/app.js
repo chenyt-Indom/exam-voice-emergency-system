@@ -808,27 +808,26 @@ function toggleDevicePanel() {
     }
 }
 
-// 判断设备类型
+// 判断设备类型（基于设备标签中的关键词）
 function classifyDevice(label) {
     const lower = (label || '').toLowerCase();
-    if (lower.includes('bluetooth') || lower.includes('蓝牙') || lower.includes('bt') ||
-        lower.includes('airpods') || lower.includes('headset') || lower.includes('headphone') ||
-        lower.includes('earbuds') || lower.includes('speaker')) {
+    // 蓝牙设备关键词
+    if (lower.includes('bluetooth') || lower.includes('蓝牙') || lower.includes('airpods') ||
+        lower.includes('buds') || lower.includes('earbud')) {
         return 'bluetooth';
     }
-    if (lower.includes('speaker') || lower.includes('扬声器') || lower.includes('realtek') ||
-        lower.includes('high definition audio') || lower.includes('headphone') ||
-        lower.includes('headset') || lower.includes('line') || lower.includes('aux') ||
-        lower.includes('3.5mm') || lower.includes('jack')) {
-        return 'wired';
+    // 明确的无线/蓝牙标识
+    if ((lower.includes('hands-free') || lower.includes('handsfree')) && !lower.includes('realtek')) {
+        return 'bluetooth';
     }
-    return 'wired'; // 默认归类为有线
+    // 默认归类为有线/内置
+    return 'wired';
 }
 
 // 刷新所有设备
 async function refreshDevices() {
     try {
-        // 先请求权限以获取完整标签
+        // 先请求音频权限以获取完整设备标签
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             stream.getTracks().forEach(t => t.stop());
@@ -856,8 +855,8 @@ function renderDeviceLists() {
     const wiredList = document.getElementById('wiredDeviceList');
 
     if (STATE.audioDevices.length === 0) {
-        if (btList) btList.innerHTML = '<div class="device-empty">未检测到蓝牙设备</div>';
-        if (wiredList) wiredList.innerHTML = '<div class="device-empty">未检测到有线设备</div>';
+        if (btList) btList.innerHTML = '<div class="device-empty">未检测到音频设备，请连接蓝牙或插入有线设备后刷新</div>';
+        if (wiredList) wiredList.innerHTML = '';
         return;
     }
 
@@ -865,18 +864,19 @@ function renderDeviceLists() {
     const wiredDevices = [];
 
     STATE.audioDevices.forEach(d => {
-        const label = d.label || '未知设备 (' + d.deviceId.slice(0, 8) + ')';
-        const type = d.label ? classifyDevice(label) : 'wired';
+        const label = d.label || '设备 (' + d.deviceId.slice(0, 8) + '...)';
+        const type = d.label ? classifyDevice(label) : 'unknown';
         const isActive = d.deviceId === STATE.outputDeviceId;
+        const typeLabel = (type === 'bluetooth') ? '蓝牙' : '有线/内置';
 
         const deviceHTML = `
             <div class="device-card ${isActive ? 'active' : ''}"
                  data-device-id="${d.deviceId}"
                  onclick="selectDevice('${d.deviceId}')">
-                <div class="device-card-icon">${isActive ? '✅' : '🔊'}</div>
+                <div class="device-card-icon">${type === 'bluetooth' ? '🔷' : '🔌'}</div>
                 <div class="device-card-info">
                     <div class="device-card-name">${escapeHtml(label)}</div>
-                    <div class="device-card-type">${type === 'bluetooth' ? '蓝牙' : '有线/内置'}</div>
+                    <div class="device-card-type">${typeLabel}</div>
                 </div>
                 <div class="device-card-status">
                     ${isActive ? '<span class="badge-active">当前使用</span>' : '<button class="btn-connect" onclick="event.stopPropagation();selectDevice(\'' + d.deviceId + '\')">连接</button>'}
@@ -894,7 +894,7 @@ function renderDeviceLists() {
     if (btList) {
         btList.innerHTML = btDevices.length > 0
             ? btDevices.join('')
-            : '<div class="device-empty">未检测到蓝牙设备</div>';
+            : '<div class="device-empty">未检测到蓝牙设备<br><small>请先通过 Windows 系统蓝牙设置配对设备，然后刷新</small></div>';
     }
     if (wiredList) {
         wiredList.innerHTML = wiredDevices.length > 0
@@ -940,41 +940,35 @@ function updateDeviceStatus() {
     statusEl.textContent = '当前输出: ' + deviceName;
 }
 
-// 蓝牙扫描
+// 蓝牙配对 - 打开 Windows 系统蓝牙设置
 async function scanBluetoothDevices() {
-    showToast('正在扫描蓝牙设备...');
+    showToast('正在打开系统蓝牙设置...');
     try {
-        // 使用 Web Bluetooth API 扫描附近设备
-        if (typeof navigator.bluetooth === 'undefined') {
-            showToast('当前环境不支持蓝牙扫描，请通过系统蓝牙设置连接设备后刷新', 'error');
-            // 回退方案：通过 enumerateDevices 刷新
-            await refreshDevices();
-            return;
-        }
-
-        // 尝试请求蓝牙设备（会弹出系统蓝牙选择器）
-        const device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: []
-        });
-
-        if (device) {
-            showToast('已发现蓝牙设备: ' + (device.name || '未命名设备'), 'success');
-            // 连接设备
-            await device.gatt.connect();
-            showToast('蓝牙设备已连接: ' + (device.name || '未命名设备'), 'success');
+        const res = await fetch('/api/open-bluetooth-settings');
+        const data = await res.json();
+        if (data.success) {
+            showToast('已打开 Windows 蓝牙设置，请在此配对设备后点击"刷新"', 'success');
+        } else {
+            showToast('无法打开蓝牙设置: ' + data.error, 'error');
         }
     } catch (e) {
-        if (e.name === 'NotFoundError') {
-            showToast('未发现蓝牙设备，请确保设备已开启蓝牙并处于可发现模式');
-        } else if (e.name === 'SecurityError') {
-            showToast('蓝牙扫描需要用户授权，请在弹窗中选择设备');
-        } else {
-            showToast('蓝牙扫描: ' + e.message);
-        }
+        showToast('无法打开蓝牙设置，请手动打开 Windows 设置 > 蓝牙和设备', 'error');
     }
-    // 无论如何都刷新设备列表
-    await refreshDevices();
+    // 延迟刷新，等待用户配对
+    setTimeout(() => refreshDevices(), 3000);
+}
+
+// 打开声音设置
+async function openSoundSettings() {
+    try {
+        const res = await fetch('/api/open-sound-settings');
+        const data = await res.json();
+        if (data.success) {
+            showToast('已打开声音设置', 'success');
+        }
+    } catch (e) {
+        showToast('无法打开声音设置', 'error');
+    }
 }
 
 // 监听设备变化
@@ -1008,6 +1002,5 @@ async function setAudioDevice() {
 
 // 兼容旧的 onDeviceChange 函数
 async function onDeviceChange() {
-    // 旧版兼容，现在由 selectDevice 处理
     await refreshDevices();
 }

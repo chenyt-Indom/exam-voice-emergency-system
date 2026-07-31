@@ -262,6 +262,32 @@ def check_schedule():
     })
 
 
+@app.route("/api/open-bluetooth-settings")
+def open_bluetooth_settings():
+    """打开 Windows 蓝牙设置"""
+    try:
+        if os.name == "nt":
+            subprocess.Popen(["start", "ms-settings:bluetooth"], shell=True)
+        else:
+            subprocess.Popen(["xdg-open", "gnome-control-center", "bluetooth"])
+        return jsonify({"success": True, "message": "已打开蓝牙设置"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/open-sound-settings")
+def open_sound_settings():
+    """打开 Windows 声音设置"""
+    try:
+        if os.name == "nt":
+            subprocess.Popen(["start", "ms-settings:sound"], shell=True)
+        else:
+            subprocess.Popen(["xdg-open", "gnome-control-center", "sound"])
+        return jsonify({"success": True, "message": "已打开声音设置"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/multi-upload", methods=["POST"])
 def multi_upload():
     """批量上传音频文件"""
